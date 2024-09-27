@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Flask App</title>
+    <link rel="icon" href="{{ url_for('static', filename='raspilogo.png') }}">
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+    <script src="https://code.jquery.com/jquery-3.4.1.min.js"></script>
+    <script src="http://code.highcharts.com/highcharts.js"></script>
+
+    <style>
+        body {
+  font-family: 'General Sans', sans-serif;
+  background-color:#020617 ;
+  color: #f1f5f9;
+}
+
+nav {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--clr-dark);
+  box-shadow: 0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 20px rgba(80, 200, 120, 0.8) ;
+  padding: 1rem;
+}
+
+nav .logo {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: bold;
+  animation: glowing 0.5s ease infinite normal;
+}
+@keyframes glowing{
+  0%{
+    color: var(--clr-light);
+    text-shadow: 0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 20px rgba(80, 200, 120, 0.8);
+  }
+  100%{
+    color:var(--clr-green);
+  }
+}
+
+nav ul {
+  list-style-type: none;
+  display: flex;
+}
+
+nav ul li {
+  margin-left: 20px;
+}
+
+nav ul li a {
+  color: #fff;
+  text-decoration: none;
+  padding: 0.5rem 1rem;
+  transition: background-color 0.3s ease;
+}
+
+nav ul li a:hover {
+  text-shadow: 0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 10px rgba(80, 200, 120, 0.8),0 0 20px rgba(80, 200, 120, 0.8);
+  border-radius: 5px;
+}
+#bg{
+  border: 3px solid white;
+}
+        #alert-icon, #default-icon {
+            width: 70px;
+            height: 70px;
+        }
+
+        #buzzeron { color: red; font-weight: bold; }
+        #buzzeroff { font-weight: bold; }
+        .buzzer,.buzzer-p{
+            display: flex;
+            justify-content: end;
+            margin-right:20rem ;
+        }
+        .row{
+          display: flex;
+          flex-direction: column;
+          align-items: end;
+          gap: 4rem;
+
+        }
+        #webcam{
+          position: absolute;
+        }
+        .camera-controls{
+          display: inline-block;
+          position: absolute;
+          bottom: 4rem;
+        }
+        .capture-controls{
+          display: inline-block;
+          position: absolute;
+          top: 37rem;
+        }
+        #image-gallery{
+            display: flex;
+            flex-direction: row;
+            height: 150px;
+            width: 250px;
+            gap: 2rem;
+        }
+
+    </style>
+</head>
+
+<body>
+    <nav>
+        <div class="logo">Fight Tons</div>
+        <ul>
+            <li><a href="index.html">Home</a></li>
+            <li><a href="./about.html">About</a></li>
+            <li><a href="./projects.html">Dashboard</a></li>
+            <li><a href="#contact">Contact</a></li>
+        </ul>
+    </nav>
+    <h2>Live Camera Feed</h2>
+<video id="webcam" width="500px" autoplay playsinline></video>
+        <!-- Camera control buttons -->
+    <div class="camera-controls">
+      <button id="start-camera" class="btn btn-primary">Turn Camera On</button>
+      <button id="stop-camera" class="btn btn-danger">Turn Camera Off</button>
+  </div>
+  <div class="capture-controls">
+    <button id="capture-image" class="btn btn-success">Capture Image</button>
+    <br>
+    <img width="300px" id="captured-image" alt="Captured Image" />
+    <p id="capture-time" class="date-time"></p>
+    <div class="gallery" id="image-gallery"></div>
+</div>
+
+<div class="container-fluid">
+  <div class="buzzer">
+    <img id="alert-icon" src="{{ url_for('static', filename='buzzer.png') }}" alt="Alert Icon" style="display: none;">
+    <img id="default-icon" src="{{ url_for('static', filename='buzzer_off_new.png') }}" alt="Default Icon" style="display: none;">
+</div>
+<div class="buzzer-p">
+    <p id="buzzeron">Buzzer one - ON</p>
+    <p id="buzzeroff">Buzzer one - OFF</p>
+</div>
+    <div class="row">
+        <div class="col-md-6">
+            <div id="data-container-sensor1"></div> <!-- Chart for Sensor 1 -->
+            <p>Motion: <span id="pir1">Loading...</span> </p>
+          </div>
+        <div class="col-md-6">
+            <div id="data-container-sensor2"></div> 
+            <p>Temperature: <span id="temp">Loading...</span> C</p><!-- Chart for Sensor 2 -->
+        </div>
+    </div>
+</div>
+
+<!-- Icons -->
+
+<img id="capturedImage" src="" alt="" style="display:none; width:300px;"/>
+<script>
+    var chart1, chart2;
+
+    $(document).ready(function() {
+        // Initialize chart for Sensor 1
+        var video = document.getElementById('webcam');
+
+// Check if the browser supports getUserMedia
+if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+    // Request the video stream
+    navigator.mediaDevices.getUserMedia({ video: true })
+    .then(function(stream) {
+        // Attach the video stream to the video element
+        video.srcObject = stream;
+    })
+    .catch(function(error) {
+        console.error("Error accessing the camera: ", error);
+    });
+} else {
+    console.error("Your browser does not support getUserMedia API");
+}
+        chart1 = Highcharts.chart('data-container-sensor1', {
+            chart: {
+                type: 'column',
+                width: 500, // Set the width of the graph (in pixels)
+               height: 300, // Set the height of the graph (in pixels)
+            },
+            title: {
+                text: 'Motion Sensor Graph'
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150,
+                maxZoom: 20 * 1000
+            },
+            yAxis: {
+                title: {
+                    text: 'Detection'
+                },
+                min: 0,
+                max: 1,
+                tickInterval: 1,
+                labels: {
+                    formatter: function () {
+                        return this.value;
+                    }
+                }
+                
+            },
+            series: [{
+                name: 'motion',
+                color: '#FF5733', // Color of the line
+                data: []
+                
+            }]
+        });
+
+        // Initialize chart for Sensor 2
+        chart2 = Highcharts.chart('data-container-sensor2', {
+            chart: {
+                type: 'spline',
+                width: 500, // Set the width of the graph (in pixels)
+               height: 300,
+            },
+            title: {
+                text: 'Temperature Graph',
+                plotBackgroundColor: '#f0f0f0',
+            },
+            xAxis: {
+                type: 'datetime',
+                tickPixelInterval: 150,
+                maxZoom: 20 * 1000
+            },
+            yAxis: {
+                title: {
+                    text: 'Range'
+                },
+                labels: {
+                    formatter: function () {
+                        return this.value + ' C';
+                    }
+                }
+            },
+            series: [{
+                name: 'Temperature',
+                data: [],
+                color: '#FF5733', // Color of the line
+       
+            }]
+        });
+
+        function requestPirData() {
+            $.get('/pirdata', function (result) {
+                var sensor1 = result.sensorbuz;  // [timestamp, buzzer_state, motion]
+                var sensor2 = result.sensortemp;  // [timestamp, temperature]
+
+                // Add the point to the chart for Sensor 1
+                 chart1.series[0].addPoint({ x: sensor1[0], y: sensor1[2] }, true, chart1.series[0].data.length > 20);
+                // Add the point to the chart for Sensor 2
+                chart2.series[0].addPoint([sensor2[0], sensor2[1]], true, chart2.series[0].data.length > 20);
+
+                // Update the page based on motion detection
+                if (sensor1[1] === "on") {
+                    $('#alert-icon').show();
+                    $('#default-icon').hide();
+                    $('#buzzeron').show();
+                    $('#buzzeroff').hide();
+                } else {
+                    $('#alert-icon').hide();
+                    $('#default-icon').show();
+                    $('#buzzeron').hide();
+                    $('#buzzeroff').show();
+                }
+
+                $('#pir1').text(sensor1[2] === 1 ? "Detected" : "Not Detected");
+                $('#temp').text(sensor2[1]);
+
+                // Request data again after 2 seconds
+                setTimeout(requestPirData, 2000);
+            }).fail(function() {
+                console.error("Error fetching PIR data");
+            });
+        }
+
+        requestPirData(); // Start requesting data when the document is ready
+    });
+</script>
+<script>
+  var video = document.getElementById('webcam');
+  var stream = null;
+  var galleryImages = [];  // Array to store captured images
+
+  // Function to start the camera
+  function startCamera() {
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+          navigator.mediaDevices.getUserMedia({ video: true })
+              .then(function(s) {
+                  stream = s;
+                  video.srcObject = stream;
+                  console.log("Camera is ON");
+              })
+              .catch(function(error) {
+                  console.error("Error accessing the camera: ", error);
+              });
+      } else {
+          console.error("Your browser does not support getUserMedia API");
+      }
+  }
+
+  // Function to stop the camera
+  function stopCamera() {
+      if (stream) {
+          let tracks = stream.getTracks();  // Get all tracks (audio/video)
+          tracks.forEach(track => track.stop());  // Stop each track
+          video.srcObject = null;  // Remove the stream from the video element
+          console.log("Camera is OFF");
+      }
+  }
+
+  // Function to capture an image from the video
+  function captureImage() {
+      var canvas = document.createElement('canvas');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+
+      // Get the captured image as a base64 string
+      var imageData = canvas.toDataURL('image/png');
+      
+      // Display the captured image in the image element
+      var capturedImage = document.getElementById('captured-image');
+      capturedImage.src = imageData;
+      capturedImage.style.display = 'block';
+
+      // Display the capture time
+      var captureTime = document.getElementById('capture-time');
+      var currentTime = new Date();
+      captureTime.textContent = 'Captured on: ' + currentTime.toLocaleString();
+
+      // Add the new image to the gallery
+      updateGallery(imageData);
+  }
+
+  // Function to update the image gallery with the latest image
+  function updateGallery(imageData) {
+      // Add the new image to the array
+      galleryImages.push(imageData);
+
+      // If there are more than 5 images, remove the oldest one
+      if (galleryImages.length > 5) {
+          galleryImages.shift();
+      }
+
+      // Get the gallery element
+      var gallery = document.getElementById('image-gallery');
+      gallery.innerHTML = '';  // Clear the current gallery content
+
+      // Loop through the images and display them in the gallery
+      galleryImages.forEach(function(image) {
+          var imgElement = document.createElement('img');
+          imgElement.src = image;
+          gallery.appendChild(imgElement);
+      });
+  }
+
+  // Event listeners for buttons
+  document.getElementById('start-camera').addEventListener('click', startCamera);
+  document.getElementById('stop-camera').addEventListener('click', stopCamera);
+  document.getElementById('capture-image').addEventListener('click', captureImage);
+
+  // Automatically start the camera when the page loads
+  startCamera();
+</script>
+
+
+</body>
+</html>
